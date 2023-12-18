@@ -4,59 +4,80 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <signal.h>
 
 #define MAXLINE 4096   /*max text line length*/
 #define SERV_PORT 3000 /*port*/
+#define LISTENQ 8      /*maximum number of client connections*/
+
+void sig_chld(int signo)
+{
+    pid_t pid;
+    int stat;
+    while ((pid = waitpid(-1, &stat, WNOHANG)) > 0)
+        printf("child %d terminated\n", pid);
+    return;
+}
 
 int main(int argc, char **argv)
 {
-    int sockfd;
-    struct sockaddr_in servaddr;
-    char sendline[MAXLINE], recvline[MAXLINE];
+    int listenfd, connfd, n;
+    pid_t childpid;
+    socklen_t clilen;
+    char buf[MAXLINE];
+    struct sockaddr_in cliaddr, servaddr;
 
-    // basic check of the arguments
-    // additional checks can be inserted
-    if (argc != 2)
-    {
-        perror("Usage: TCPClient <IP address of the server");
-        exit(1);
-    }
-
-    // Create a socket for the client
+    // Create a socket for the soclet
     // If sockfd<0 there was an error in the creation of the socket
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("Problem in creating the socket");
         exit(2);
     }
 
-    // Creation of the socket
-    memset(&servaddr, 0, sizeof(servaddr));
+    // preparation of the socket address
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr(argv[1]);
-    servaddr.sin_port = htons(SERV_PORT); // convert to big-endian order
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(SERV_PORT);
 
-    // Connection of the client to the socket
-    if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+    // bind the socket
+    bind(listenfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+
+    // listen to the socket by creating a connection queue, then wait for clients
+    listen(listenfd, LISTENQ);
+
+    printf("%s\n", "Server running...waiting for connections.");
+
+    for (;;)
     {
-        perror("Problem in connecting to the server");
-        exit(3);
-    }
 
-    while (fgets(sendline, MAXLINE, stdin) != NULL)
-    {
+        clilen = sizeof(cliaddr);
+        // accept a connection
+        connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &clilen);
 
-        send(sockfd, sendline, strlen(sendline), 0);
+        printf("%s\n", "Received request...");
 
-        if (recv(sockfd, recvline, MAXLINE, 0) == 0)
-        {
-            // error: server terminated prematurely
-            perror("The server terminated prematurely");
-            exit(4);
+        if ((childpid = fork()) == 0)
+        { // if it’s 0, it’s child process
+
+            printf("%s\n", "Child created for dealing with client requests");
+
+            // close listening socket
+            close(listenfd);
+
+            while ((n = recv(connfd, buf, MAXLINE, 0)) > 0)
+            {
+                printf("%s", "String received from and resent to the client:");
+                puts(buf);
+                send(connfd, buf, n, 0);
+            }
+
+            if (n < 0)
+                printf("%s\n", "Read error");
+            exit(0);
         }
-        printf("%s", "String received from the server: ");
-        fputs(recvline, stdout);
+        // close socket of the server
+        signal(SIGCHLD, sig_chld);
+        close(connfd);
     }
-
-    exit(0);
 }
