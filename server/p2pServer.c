@@ -436,7 +436,7 @@ int main(int argc, char **argv)
                     collection = mongoc_client_get_collection(client, "network_info", "file_info");
                     bson_oid_t req_id, acc_id;
                     bson_t child;
-                    char req_file[MAXLINE], req_user[MAXLINE], acc_user[MAXLINE];
+                    char req_file[MAXLINE], req_user[MAXLINE], acc_user[MAXLINE], fetch_ack_msg[MAXLINE] = "fetch_ack ";
                     trun = strtok(NULL, " ");
                     if (strcmp(trun, "failed") != 0)
                     {
@@ -456,10 +456,14 @@ int main(int argc, char **argv)
                         BSON_APPEND_OID(query, "user_id", &acc_id);
                         if (!mongoc_collection_update_one(collection, query, doc, NULL, NULL, &error))
                         {
+                            strcat(fetch_ack_msg, "failed");
+                            send(connfd, fetch_ack_msg, MAXLINE, 0);
                             fprintf(stderr, "%s\n", error.message);
                         }
                         else
                         {
+                            strcat(fetch_ack_msg, "success");
+                            send(connfd, fetch_ack_msg, MAXLINE, 0);
                             printf("Account edited!\n");
                             str = bson_as_canonical_extended_json(query, NULL);
                             printf("%s\n", str);
@@ -482,11 +486,17 @@ int main(int argc, char **argv)
                         BSON_APPEND_UTF8(doc, "name", req_file);
                         if (!mongoc_collection_delete_many(collection, doc, NULL, NULL, &error))
                         {
-                            printf("Exit Deletion failed\n");
+                            strcat(fetch_ack_msg, "failed");
+                            send(connfd, fetch_ack_msg, MAXLINE, 0);
+                            printf("Transfer failed\n");
                             fprintf(stderr, "Delete failed: %s\n", error.message);
                         }
                         else
-                            puts("Exit Files deleted!\n");
+                        {
+                            strcat(fetch_ack_msg, "success");
+                            send(connfd, fetch_ack_msg, MAXLINE, 0);
+                            puts("Transfer deleted!\n");
+                        }
                     }
                 }
                 memset(buf, 0, sizeof(buf));

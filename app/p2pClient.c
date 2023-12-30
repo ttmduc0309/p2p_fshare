@@ -210,7 +210,7 @@ int main(int argc, char **argv)
     {
         while (1)
         {
-            char req_user[MAXLINE], req_file[MAXLINE], fetch_mes[MAXLINE];
+            char req_user[MAXLINE], req_file[MAXLINE], fetch_mes[MAXLINE], return_msg[MAXLINE] = "request_ack ", server_process[MAXLINE];
             memset(fetch_mes, 0, sizeof(fetch_mes));
             readfd = master;
             if (select(FD_SETSIZE, &readfd, NULL, NULL, NULL) == ERROR)
@@ -256,17 +256,19 @@ int main(int argc, char **argv)
                         {
                             printf("Message: %s\n", input);
                             char *section = strtok(input, " ");
-                            if (strcmp(section, "fetch") == 0)
+                            if (strcmp(section, "request") == 0)
                             {
                                 section = strtok(NULL, " ");
                                 strcpy(req_file, section);
                                 section = strtok(NULL, " ");
                                 strcpy(req_user, section);
-                                printf("Request: %s", req_file);
+                                printf("Request: %s\n", req_file);
                                 FILE *fr;
                                 fr = fopen(req_file, "r");
                                 if (!fr)
                                 {
+                                    strcat(return_msg, " failed");
+                                    send(i, return_msg, MAXLINE, 0);
                                     fprintf(stderr, "ERROR : Opening requested file.REQUESTED FILE NOT FOUND \n");
                                     close(i);           // closing this connection
                                     FD_CLR(i, &master); // remove from master set
@@ -276,9 +278,18 @@ int main(int argc, char **argv)
                                     strcat(fetch_mes, " ");
                                     strcat(fetch_mes, req_file);
                                     send(sockfd, fetch_mes, MAXLINE, 0);
+                                    recv(sockfd, server_process, MAXLINE, 0);
+                                    char *section = strtok(server_process, " ");
+                                    section = strtok(NULL, " ");
+                                    if (strcmp(section, "success") == 0)
+                                        printf("Server Delete process success\n");
+                                    else
+                                        printf("Server Delete process failed\n");
                                 }
                                 else
                                 {
+                                    strcat(return_msg, " success");
+                                    send(i, return_msg, MAXLINE, 0);
                                     char buf[MAXLINE];
                                     size_t bytesRead;
 
@@ -298,6 +309,13 @@ int main(int argc, char **argv)
                                     strcat(fetch_mes, " ");
                                     strcat(fetch_mes, user_id);
                                     send(sockfd, fetch_mes, MAXLINE, 0);
+                                    recv(sockfd, server_process, MAXLINE, 0);
+                                    char *section = strtok(server_process, " ");
+                                    section = strtok(NULL, " ");
+                                    if (strcmp(section, "success") == 0)
+                                        printf("Server Transfer process success\n");
+                                    else
+                                        printf("Server Transfer process failed\n");
                                 }
                             }
                         }
@@ -454,7 +472,7 @@ int main(int argc, char **argv)
         }
         case 5:
         {
-            char file_fet[MAXLINE], peer_ip[MAXLINE], peer_port[MAXLINE], fetch_msg[MAXLINE] = "fetch ";
+            char file_fet[MAXLINE], peer_ip[MAXLINE], peer_port[MAXLINE], fetch_msg[MAXLINE] = "request ", peer_msg[MAXLINE];
             fflush(stdin);
             printf("Enter file to be fetched: ");
             scanf(" %[^\t\n]s", file_fet);
@@ -488,31 +506,41 @@ int main(int argc, char **argv)
 
             send(peer_sock, fetch_msg, strlen(fetch_msg), 0);
             printf("Recieving file from peer. Please wait \n");
-            FILE *fetch_file = fopen(file_fet, "w");
-            if (fetch_file == NULL) // error creating file
+            if (recv(peer_sock, peer_msg, MAXLINE, 0) > 0)
             {
-                printf("File %s cannot be created.\n", file_fet);
-            }
-
-            else
-            {
-                int file_fetch_size = 0;
-                int len_recd = 0;
-
-                while ((len_recd = recv(peer_sock, input, MAXLINE, 0)) > 0)
+                char *section = strtok(peer_msg, " ");
+                section = strtok(NULL, " ");
+                if (strcmp(section, "success") == 0)
                 {
-                    fwrite(input, 1, len_recd, fetch_file);
-                }
+                    FILE *fetch_file = fopen(file_fet, "w");
+                    if (fetch_file == NULL) // error creating file
+                    {
+                        printf("File %s cannot be created.\n", file_fet);
+                    }
 
-                if (len_recd < 0)
-                {
-                    perror("Read error");
-                    exit(1);
-                }
+                    else
+                    {
+                        int file_fetch_size = 0;
+                        int len_recd = 0;
 
-                fclose(fetch_file); // close opened file
-                printf("FETCH COMPLETE\n");
-                close(peer_sock); // close socket
+                        while ((len_recd = recv(peer_sock, input, MAXLINE, 0)) > 0)
+                        {
+                            fwrite(input, 1, len_recd, fetch_file);
+                        }
+
+                        if (len_recd < 0)
+                        {
+                            perror("Read error");
+                            exit(1);
+                        }
+
+                        fclose(fetch_file); // close opened file
+                        printf("FETCH COMPLETE\n");
+                        close(peer_sock); // close socket
+                    }
+                }
+                else
+                    printf("Fetch Failed\n");
             }
             break;
         }
