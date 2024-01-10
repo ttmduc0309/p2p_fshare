@@ -84,6 +84,43 @@ int main(int argc, char **argv)
     }
     // --------------------------------------------------------------------------------------
 
+    int listenfd;
+    int len;
+    fd_set master;
+    fd_set readfd;
+    struct sockaddr_in client;
+
+    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        perror("Problem in creating the socket");
+        exit(2);
+    }
+
+    // preparation of the socket address
+    hostaddr.sin_family = AF_INET;
+    hostaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // hostaddr.sin_port = htons(listen_port);
+    // bzero(&hostaddr.sin_zero, 8); // padding zeros
+
+    // // bind the socket
+    // if (bind(listenfd, (struct sockaddr *)&hostaddr, sizeof(hostaddr)) == ERROR)
+    // {
+    //     perror("bind");
+    //     exit(-1);
+    // }
+    for (int port = 1024; port <= 65535; ++port)
+    {
+        hostaddr.sin_port = htons(port);
+        bzero(&hostaddr.sin_zero, 8);
+
+        if (bind(listenfd, (struct sockaddr *)&hostaddr, sizeof(hostaddr)) == 0)
+        {
+            printf("Server listening on port %d\n", port);
+            listen_port = port;
+            break;
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------
     // Login and Register
     while (1)
@@ -108,10 +145,10 @@ int main(int argc, char **argv)
             scanf("%s", password);
             strcat(msg, password);
             strcat(msg, " ");
-            strcat(msg, ip_add);
-            strcat(msg, " ");
-            printf("Enter listen port no: ");
-            scanf("%d", &listen_port);
+            // strcat(msg, ip_add);
+            // strcat(msg, " ");
+            // printf("Enter listen port no: ");
+            // scanf("%d", &listen_port);
             sprintf(port_str, "%d", listen_port);
             strcat(msg, port_str);
             send(sockfd, msg, sizeof(msg), 0);
@@ -128,10 +165,10 @@ int main(int argc, char **argv)
             scanf("%s", password);
             strcat(msg, password);
             strcat(msg, " ");
-            strcat(msg, ip_add);
-            strcat(msg, " ");
-            printf("Enter listen port no: ");
-            scanf("%d", &listen_port);
+            // strcat(msg, ip_add);
+            // strcat(msg, " ");
+            // printf("Enter listen port no: ");
+            // scanf("%d", &listen_port);
             sprintf(port_str, "%d", listen_port);
             strcat(msg, port_str);
             send(sockfd, msg, sizeof(msg), 0);
@@ -171,31 +208,6 @@ int main(int argc, char **argv)
 
     // --------------------------------------------------------------------------------------
     // Peer acting as a Server
-
-    int listenfd;
-    int len;
-    fd_set master;
-    fd_set readfd;
-    struct sockaddr_in client;
-
-    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        perror("Problem in creating the socket");
-        exit(2);
-    }
-
-    // preparation of the socket address
-    hostaddr.sin_family = AF_INET;
-    hostaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    hostaddr.sin_port = htons(listen_port);
-    bzero(&hostaddr.sin_zero, 8); // padding zeros
-
-    // bind the socket
-    if (bind(listenfd, (struct sockaddr *)&hostaddr, sizeof(hostaddr)) == ERROR)
-    {
-        perror("bind");
-        exit(-1);
-    }
 
     if ((listen(listenfd, LISTENQ)) == ERROR) // listen for max connections
     {
